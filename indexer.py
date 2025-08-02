@@ -32,6 +32,13 @@ try:
     print(f"Number of articles loaded: {len(articles)}", file=sys.stderr)
     
     # Preprocessing konten artikel
+    print("Original and cleaned texts for first few documents:", file=sys.stderr)
+    for i, a in enumerate(articles[:3]):
+        original_text = a['konten']
+        cleaned_text = clean_text(original_text)
+        print(f"Doc {i} original: {original_text[:100]}...", file=sys.stderr)
+        print(f"Doc {i} cleaned: {cleaned_text[:100]}...", file=sys.stderr)
+
     corpus = [clean_text(a['konten']) for a in articles]
     # Print first few processed documents
     print("First few processed documents:", file=sys.stderr)

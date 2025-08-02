@@ -5,6 +5,7 @@ factory = StemmerFactory()
 stemmer = factory.create_stemmer()
 
 def clean_text(text):
+    print("Starting to clean text...")
     # Convert to lowercase
     text = text.lower()
     # Remove special characters but keep spaces
@@ -13,5 +14,8 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     # Apply stemming if text is not empty
     if text:
-        return stemmer.stem(text)
+        cleaned = stemmer.stem(text)
+        print("Finished cleaning text.")
+        return cleaned
+    print("No text to clean.")
     return text
