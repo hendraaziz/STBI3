@@ -1,9 +1,14 @@
 import json
+import pickle
+import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from preprocess import clean_text
 import sys
 import re
+
+# File untuk menyimpan model TF-IDF dan data terkait
+MODEL_FILE = "tfidf_model.pkl"
 
 def extract_access_count(tanggal):
     """Mengekstrak jumlah akses dari string tanggal.
@@ -23,42 +28,104 @@ def extract_access_count(tanggal):
     except:
         return 0
 
-try:
-    # Membaca data artikel dari file JSON
-    with open("articles.json", "r", encoding="utf-8") as f:
-        articles = json.load(f)
+# Variabel global untuk menyimpan data
+articles = None
+titles = None
+access_counts = None
+vectorizer = None
+X = None
+corpus = None
 
-    # Print debugging information
-    print(f"Number of articles loaded: {len(articles)}", file=sys.stderr)
+def initialize_model():
+    """Inisialisasi model TF-IDF dan data terkait.
+    Jika file model sudah ada, muat dari file tersebut.
+    Jika tidak, buat model baru dan simpan ke file.
+    """
+    global articles, titles, access_counts, vectorizer, X, corpus
     
-    # Preprocessing konten artikel
-    print("Original and cleaned texts for first few documents:", file=sys.stderr)
-    for i, a in enumerate(articles[:3]):
-        original_text = a['konten']
-        cleaned_text = clean_text(original_text)
-        print(f"Doc {i} original: {original_text[:100]}...", file=sys.stderr)
-        print(f"Doc {i} cleaned: {cleaned_text[:100]}...", file=sys.stderr)
+    try:
+        # Cek apakah file model sudah ada
+        if os.path.exists(MODEL_FILE):
+            print("Memuat model TF-IDF dari file...", file=sys.stderr)
+            try:
+                # Muat model dari file
+                with open(MODEL_FILE, 'rb') as f:
+                    data = pickle.load(f)
+                    articles = data['articles']
+                    titles = data['titles']
+                    access_counts = data['access_counts']
+                    vectorizer = data['vectorizer']
+                    X = data['X']
+                    corpus = data['corpus']
+                
+                print(f"Model berhasil dimuat. {len(articles)} artikel tersedia.", file=sys.stderr)
+                print(f"Vocabulary size: {len(vectorizer.vocabulary_)}", file=sys.stderr)
+                return True
+            except Exception as e:
+                print(f"Error saat memuat model: {str(e)}. Membuat model baru...", file=sys.stderr)
+        
+        # Jika file tidak ada atau terjadi error saat memuat, buat model baru
+        print("Membuat model TF-IDF baru...", file=sys.stderr)
+        
+        # Membaca data artikel dari file JSON
+        with open("articles.json", "r", encoding="utf-8") as f:
+            articles = json.load(f)
 
-    corpus = [clean_text(a['konten']) for a in articles]
-    # Print first few processed documents
-    print("First few processed documents:", file=sys.stderr)
-    for i, doc in enumerate(corpus[:3]):
-        print(f"Doc {i}: {doc[:100]}...", file=sys.stderr)
-    
-    # Mengekstrak judul dan jumlah akses
-    titles = [a['judul'] for a in articles]
-    access_counts = [extract_access_count(a.get('tanggal', '0 kali')) for a in articles]
-    
-    # Menghitung skor TF-IDF
-    vectorizer = TfidfVectorizer(min_df=1, stop_words=None)
-    X = vectorizer.fit_transform(corpus)
-    
-    print(f"Vocabulary size: {len(vectorizer.vocabulary_)}", file=sys.stderr)
-    print(f"Feature names: {list(vectorizer.vocabulary_.keys())[:10]}", file=sys.stderr)
+        # Print debugging information
+        print(f"Number of articles loaded: {len(articles)}", file=sys.stderr)
+        
+        # Preprocessing konten artikel
+        print("Original and cleaned texts for first few documents:", file=sys.stderr)
+        for i, a in enumerate(articles[:3]):
+            original_text = a['konten']
+            cleaned_text = clean_text(original_text)
+            print(f"Doc {i} original: {original_text[:100]}...", file=sys.stderr)
+            print(f"Doc {i} cleaned: {cleaned_text[:100]}...", file=sys.stderr)
 
-except Exception as e:
-    print(f"Error during initialization: {str(e)}", file=sys.stderr)
-    raise
+        corpus = [clean_text(a['konten']) for a in articles]
+        # Print first few processed documents
+        print("First few processed documents:", file=sys.stderr)
+        for i, doc in enumerate(corpus[:3]):
+            print(f"Doc {i}: {doc[:100]}...", file=sys.stderr)
+        
+        # Mengekstrak judul dan jumlah akses
+        titles = [a['judul'] for a in articles]
+        access_counts = [extract_access_count(a.get('tanggal', '0 kali')) for a in articles]
+        
+        # Menghitung skor TF-IDF
+        vectorizer = TfidfVectorizer(min_df=1, stop_words=None)
+        X = vectorizer.fit_transform(corpus)
+        
+        print(f"Vocabulary size: {len(vectorizer.vocabulary_)}", file=sys.stderr)
+        print(f"Feature names: {list(vectorizer.vocabulary_.keys())[:10]}", file=sys.stderr)
+        
+        # Simpan model ke file
+        save_model()
+        
+        return True
+    except Exception as e:
+        print(f"Error during initialization: {str(e)}", file=sys.stderr)
+        raise
+
+def save_model():
+    """Menyimpan model TF-IDF dan data terkait ke file."""
+    try:
+        print("Menyimpan model TF-IDF ke file...", file=sys.stderr)
+        data = {
+            'articles': articles,
+            'titles': titles,
+            'access_counts': access_counts,
+            'vectorizer': vectorizer,
+            'X': X,
+            'corpus': corpus
+        }
+        with open(MODEL_FILE, 'wb') as f:
+            pickle.dump(data, f)
+        print(f"Model berhasil disimpan ke {MODEL_FILE}", file=sys.stderr)
+        return True
+    except Exception as e:
+        print(f"Error saat menyimpan model: {str(e)}", file=sys.stderr)
+        return False
 
 def search(query, alpha=0.7):
     """Mencari artikel berdasarkan query dengan mempertimbangkan similarity dan frekuensi akses.
@@ -118,13 +185,45 @@ def search(query, alpha=0.7):
 
 if __name__ == "__main__":
     try:
-        # Opsi 1: Hardcoded query
-        # query = "ekonomi desa"
+        print("\n===== SISTEM TEMU BALIK INFORMASI =====\n")
         
-        # Opsi 2: Input dari user
-        query = input("Masukkan query pencarian: ")
+        # Inisialisasi model
+        if os.path.exists(MODEL_FILE):
+            print("\n1. Gunakan model yang sudah ada")
+            print("2. Buat model baru (proses ulang data)")
+            model_choice = input("Pilih opsi model (1/2): ")
+            
+            if model_choice == "2":
+                # Hapus file model lama jika ada
+                if os.path.exists(MODEL_FILE):
+                    os.remove(MODEL_FILE)
+                    print(f"File model lama {MODEL_FILE} dihapus.")
         
-        # Jalankan pencarian
-        search(query)
+        # Inisialisasi model (akan memuat dari file jika ada, atau membuat baru jika tidak ada)
+        initialize_model()
+        
+        # Menu pencarian
+        while True:
+            print("\n===== MENU PENCARIAN =====\n")
+            print("1. Gunakan query hardcoded")
+            print("2. Masukkan query secara manual")
+            print("3. Keluar")
+            choice = input("Pilih opsi (1/2/3): ")
+            
+            if choice == "3":
+                print("Terima kasih telah menggunakan sistem pencarian!")
+                break
+            
+            if choice == "1":
+                # Opsi 1: Hardcoded query
+                query = "ekonomi desa"
+                print(f"\nMenggunakan query hardcoded: '{query}'")
+            else:
+                # Opsi 2: Input dari user
+                query = input("\nMasukkan query pencarian: ")
+            
+            # Jalankan pencarian
+            search(query)
+            
     except Exception as e:
         print(f"Error during search: {str(e)}", file=sys.stderr)
