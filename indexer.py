@@ -70,8 +70,13 @@ def search(query, alpha=0.7):
     Returns:
         list: Daftar artikel terurut berdasarkan kombinasi similarity dan frekuensi akses
     """
+    print(f"\nMencari dengan query: '{query}'")
+    print(f"Preprocessing query...")
+    cleaned_query = clean_text(query)
+    print(f"Query setelah preprocessing: '{cleaned_query}'\n")
+    
     # Menghitung similarity score
-    query_vec = vectorizer.transform([clean_text(query)])
+    query_vec = vectorizer.transform([cleaned_query])
     similarity = cosine_similarity(query_vec, X).flatten()
     
     # Normalisasi skor frekuensi akses
@@ -88,8 +93,38 @@ def search(query, alpha=0.7):
                         reverse=True)[:5]
     
     # Mengembalikan hasil pencarian dengan informasi lengkap
-    return [(titles[i], 
+    results = [(titles[i], 
              articles[i]['url'], 
              similarity[i],
              access_counts[i],
              combined_scores[i]) for i in top_indices]
+    
+    # Menampilkan hasil pencarian di terminal
+    print("\n===== HASIL PENCARIAN =====\n")
+    if not results:
+        print("Tidak ditemukan hasil yang sesuai.")
+    else:
+        for i, (title, url, sim, acc, score) in enumerate(results, 1):
+            print(f"Hasil #{i}")
+            print(f"Judul: {title}")
+            print(f"URL: {url}")
+            print(f"Similarity Score: {sim:.4f}")
+            print(f"Access Count: {acc}")
+            print(f"Combined Score: {score:.4f}")
+            print("-" * 50)
+    
+    return results
+
+
+if __name__ == "__main__":
+    try:
+        # Opsi 1: Hardcoded query
+        # query = "ekonomi desa"
+        
+        # Opsi 2: Input dari user
+        query = input("Masukkan query pencarian: ")
+        
+        # Jalankan pencarian
+        search(query)
+    except Exception as e:
+        print(f"Error during search: {str(e)}", file=sys.stderr)

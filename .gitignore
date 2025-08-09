@@ -43,3 +43,5 @@ env/
 articles.json
 *.log
 notes.txt
+articles1.json
+__pycache__/preprocess.cpython-313.pyc
