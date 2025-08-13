@@ -3,9 +3,11 @@ import pickle
 import os
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from rank_bm25 import BM25Okapi
 from preprocess import clean_text
 import sys
 import re
+import numpy as np
 
 # File untuk menyimpan model TF-IDF dan data terkait
 MODEL_FILE = "tfidf_model.pkl"
@@ -35,13 +37,15 @@ access_counts = None
 vectorizer = None
 X = None
 corpus = None
+bm25 = None
+tokenized_corpus = None
 
 def initialize_model():
-    """Inisialisasi model TF-IDF dan data terkait.
+    """Inisialisasi model TF-IDF, BM25 dan data terkait.
     Jika file model sudah ada, muat dari file tersebut.
     Jika tidak, buat model baru dan simpan ke file.
     """
-    global articles, titles, access_counts, vectorizer, X, corpus
+    global articles, titles, access_counts, vectorizer, X, corpus, bm25, tokenized_corpus
     
     try:
         # Cek apakah file model sudah ada
@@ -57,9 +61,21 @@ def initialize_model():
                     vectorizer = data['vectorizer']
                     X = data['X']
                     corpus = data['corpus']
+                    bm25 = data.get('bm25', None)
+                    tokenized_corpus = data.get('tokenized_corpus', None)
                 
                 print(f"Model berhasil dimuat. {len(articles)} artikel tersedia.", file=sys.stderr)
                 print(f"Vocabulary size: {len(vectorizer.vocabulary_)}", file=sys.stderr)
+                
+                # Jika BM25 tidak ada dalam file lama, inisialisasi ulang
+                if bm25 is None or tokenized_corpus is None:
+                    print("Menginisialisasi BM25 untuk model lama...", file=sys.stderr)
+                    tokenized_corpus = [doc.split() for doc in corpus]
+                    bm25 = BM25Okapi(tokenized_corpus)
+                    print(f"BM25 model initialized with {len(tokenized_corpus)} documents", file=sys.stderr)
+                    # Simpan ulang model dengan BM25
+                    save_model()
+                
                 return True
             except Exception as e:
                 print(f"Error saat memuat model: {str(e)}. Membuat model baru...", file=sys.stderr)
@@ -96,8 +112,14 @@ def initialize_model():
         vectorizer = TfidfVectorizer(min_df=1, stop_words=None)
         X = vectorizer.fit_transform(corpus)
         
+        # Inisialisasi BM25
+        print("Menginisialisasi BM25...", file=sys.stderr)
+        tokenized_corpus = [doc.split() for doc in corpus]
+        bm25 = BM25Okapi(tokenized_corpus)
+        
         print(f"Vocabulary size: {len(vectorizer.vocabulary_)}", file=sys.stderr)
         print(f"Feature names: {list(vectorizer.vocabulary_.keys())[:10]}", file=sys.stderr)
+        print(f"BM25 model initialized with {len(tokenized_corpus)} documents", file=sys.stderr)
         
         # Simpan model ke file
         save_model()
@@ -108,16 +130,18 @@ def initialize_model():
         raise
 
 def save_model():
-    """Menyimpan model TF-IDF dan data terkait ke file."""
+    """Menyimpan model TF-IDF, BM25 dan data terkait ke file."""
     try:
-        print("Menyimpan model TF-IDF ke file...", file=sys.stderr)
+        print("Menyimpan model TF-IDF dan BM25 ke file...", file=sys.stderr)
         data = {
             'articles': articles,
             'titles': titles,
             'access_counts': access_counts,
             'vectorizer': vectorizer,
             'X': X,
-            'corpus': corpus
+            'corpus': corpus,
+            'bm25': bm25,
+            'tokenized_corpus': tokenized_corpus
         }
         with open(MODEL_FILE, 'wb') as f:
             pickle.dump(data, f)
@@ -127,8 +151,8 @@ def save_model():
         print(f"Error saat menyimpan model: {str(e)}", file=sys.stderr)
         return False
 
-def search(query, alpha=0.7):
-    """Mencari artikel berdasarkan query dengan mempertimbangkan similarity dan frekuensi akses.
+def search_tfidf(query, alpha=0.7):
+    """Mencari artikel menggunakan TF-IDF dengan mempertimbangkan similarity dan frekuensi akses.
     
     Args:
         query (str): Query pencarian
@@ -137,10 +161,7 @@ def search(query, alpha=0.7):
     Returns:
         list: Daftar artikel terurut berdasarkan kombinasi similarity dan frekuensi akses
     """
-    print(f"\nMencari dengan query: '{query}'")
-    print(f"Preprocessing query...")
     cleaned_query = clean_text(query)
-    print(f"Query setelah preprocessing: '{cleaned_query}'\n")
     
     # Menghitung similarity score
     query_vec = vectorizer.transform([cleaned_query])
@@ -166,21 +187,99 @@ def search(query, alpha=0.7):
              access_counts[i],
              combined_scores[i]) for i in top_indices]
     
-    # Menampilkan hasil pencarian di terminal
-    print("\n===== HASIL PENCARIAN =====\n")
-    if not results:
-        print("Tidak ditemukan hasil yang sesuai.")
+    return results
+
+def search_bm25(query, alpha=0.7):
+    """Mencari artikel menggunakan BM25 dengan mempertimbangkan similarity dan frekuensi akses.
+    
+    Args:
+        query (str): Query pencarian
+        alpha (float): Bobot untuk BM25 score (1-alpha untuk skor frekuensi akses)
+        
+    Returns:
+        list: Daftar artikel terurut berdasarkan kombinasi BM25 score dan frekuensi akses
+    """
+    cleaned_query = clean_text(query)
+    tokenized_query = cleaned_query.split()
+    
+    # Menghitung BM25 scores
+    bm25_scores = bm25.get_scores(tokenized_query)
+    
+    # Normalisasi skor frekuensi akses
+    max_access = max(access_counts) if access_counts else 1
+    normalized_access = [count/max_access for count in access_counts]
+    
+    # Normalisasi BM25 scores
+    max_bm25 = max(bm25_scores) if max(bm25_scores) > 0 else 1
+    normalized_bm25 = [score/max_bm25 for score in bm25_scores]
+    
+    # Menghitung skor kombinasi
+    combined_scores = [alpha * bm25_score + (1-alpha) * acc 
+                      for bm25_score, acc in zip(normalized_bm25, normalized_access)]
+    
+    # Mendapatkan indeks artikel teratas
+    top_indices = sorted(range(len(combined_scores)), 
+                        key=lambda i: combined_scores[i], 
+                        reverse=True)[:5]
+    
+    # Mengembalikan hasil pencarian dengan informasi lengkap
+    results = [(titles[i], 
+             articles[i]['url'], 
+             bm25_scores[i],
+             access_counts[i],
+             combined_scores[i]) for i in top_indices]
+    
+    return results
+
+def search(query, alpha=0.7):
+    """Mencari artikel menggunakan kedua metode: TF-IDF dan BM25.
+    
+    Args:
+        query (str): Query pencarian
+        alpha (float): Bobot untuk similarity/BM25 score (1-alpha untuk skor frekuensi akses)
+    """
+    print(f"\nMencari dengan query: '{query}'")
+    print(f"Preprocessing query...")
+    cleaned_query = clean_text(query)
+    print(f"Query setelah preprocessing: '{cleaned_query}'\n")
+    
+    # Pencarian dengan TF-IDF
+    print("\n" + "="*60)
+    print("HASIL PENCARIAN MENGGUNAKAN TF-IDF")
+    print("="*60)
+    
+    tfidf_results = search_tfidf(query, alpha)
+    if not tfidf_results:
+        print("Tidak ditemukan hasil yang sesuai dengan TF-IDF.")
     else:
-        for i, (title, url, sim, acc, score) in enumerate(results, 1):
-            print(f"Hasil #{i}")
+        for i, (title, url, sim, acc, score) in enumerate(tfidf_results, 1):
+            print(f"\nHasil #{i}")
             print(f"Judul: {title}")
             print(f"URL: {url}")
-            print(f"Similarity Score: {sim:.4f}")
+            print(f"TF-IDF Similarity Score: {sim:.4f}")
             print(f"Access Count: {acc}")
             print(f"Combined Score: {score:.4f}")
             print("-" * 50)
     
-    return results
+    # Pencarian dengan BM25
+    print("\n" + "="*60)
+    print("HASIL PENCARIAN MENGGUNAKAN BM25")
+    print("="*60)
+    
+    bm25_results = search_bm25(query, alpha)
+    if not bm25_results:
+        print("Tidak ditemukan hasil yang sesuai dengan BM25.")
+    else:
+        for i, (title, url, bm25_score, acc, score) in enumerate(bm25_results, 1):
+            print(f"\nHasil #{i}")
+            print(f"Judul: {title}")
+            print(f"URL: {url}")
+            print(f"BM25 Score: {bm25_score:.4f}")
+            print(f"Access Count: {acc}")
+            print(f"Combined Score: {score:.4f}")
+            print("-" * 50)
+    
+    return tfidf_results, bm25_results
 
 
 if __name__ == "__main__":
