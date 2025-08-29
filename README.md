@@ -6,13 +6,21 @@ Aplikasi ini adalah sistem pencarian artikel yang mengambil data dari website DI
 
 - **Scraping artikel** dari website DISPMD Buleleng dengan paginasi
 - **Preprocessing teks** Bahasa Indonesia (cleaning, stemming, stopword removal)
-- **Dual Search Algorithm**:
+- **Triple Search Algorithm**:
   - **TF-IDF** (Term Frequency-Inverse Document Frequency)
   - **BM25** (Best Matching 25) untuk hasil yang lebih akurat
+  - **AI Expert (ChatGPT)** untuk analisis semantik mendalam
 - **Combined Scoring System** dengan bobot yang dapat disesuaikan
 - **Antarmuka web interaktif** dengan Streamlit dan layout responsif
 - **Model persistence** untuk performa yang optimal
-- **Side-by-side comparison** hasil pencarian dari kedua algoritma
+- **Multi-algorithm comparison** hasil pencarian dari tiga algoritma
+
+## 🚀 Demo Live
+
+Aplikasi ini telah di-deploy dan dapat diakses secara langsung di:
+**[https://huggingface.co/spaces/frday/search_artikel](https://huggingface.co/spaces/frday/search_artikel)**
+
+*Catatan: Demo mungkin dalam status "sleeping" karena inaktivitas. Klik link untuk mengaktifkan kembali.*
 
 ## Persyaratan Sistem
 
@@ -33,6 +41,7 @@ pip install -r requirements.txt
 - `streamlit` - Framework web untuk antarmuka
 - `scikit-learn` - Library machine learning untuk TF-IDF
 - `rank-bm25` - Implementasi algoritma BM25
+- `openai` - API ChatGPT untuk AI Expert analysis
 - `beautifulsoup4` - Web scraping
 - `requests` - HTTP requests
 - `Sastrawi` - Stemming Bahasa Indonesia
@@ -88,7 +97,7 @@ Aplikasi akan dapat diakses melalui browser di:
 - Menghapus stopwords Bahasa Indonesia
 - Melakukan stemming untuk mendapatkan kata dasar menggunakan Sastrawi
 
-### 3. Dual Algorithm Indexing (indexer.py)
+### 3. Triple Algorithm Indexing (indexer.py)
 
 #### **TF-IDF (Term Frequency-Inverse Document Frequency)**
 - Membangun matriks TF-IDF dari artikel yang telah dipreprocess
@@ -101,17 +110,24 @@ Aplikasi akan dapat diakses melalui browser di:
 - Menggunakan parameter k1 dan b untuk fine-tuning
 - Memberikan hasil yang lebih akurat untuk query pendek
 
+#### **AI Expert (ChatGPT)**
+- Menggunakan ChatGPT-3.5-turbo untuk analisis semantik mendalam
+- Menilai relevansi artikel berdasarkan pemahaman konteks dan makna
+- Memberikan reasoning/penjelasan untuk setiap penilaian
+- Mempertimbangkan konteks pemerintahan daerah Buleleng
+
 #### **Combined Scoring System**
 - Formula: `Combined Score = (α × Similarity Score) + ((1 - α) × Normalized Access Count)`
 - α (alpha) dapat disesuaikan untuk menyeimbangkan relevansi vs popularitas
 - Normalisasi access count ke skala [0,1] untuk keseimbangan
 
 ### 4. Antarmuka Web (app.py)
-- **Dual search interface** dengan hasil TF-IDF dan BM25 side-by-side
+- **Triple search interface** dengan hasil TF-IDF, BM25, dan AI Expert side-by-side
 - **Model management** dengan opsi load/create model
 - **Interactive slider** untuk mengatur bobot α
-- **Detailed metrics** untuk setiap artikel (similarity, access, combined score)
-- **Responsive layout** dengan sidebar dan kolom terpisah
+- **AI Expert integration** dengan ChatGPT untuk analisis semantik
+- **Detailed metrics** untuk setiap artikel (similarity, access, combined score, AI reasoning)
+- **Responsive layout** dengan sidebar dan kolom terpisah untuk multi-algoritma
 - **Error handling** dan loading indicators
 
 ## Pengembangan
@@ -122,27 +138,35 @@ Untuk menambahkan artikel baru:
 3. Hapus `tfidf_model.pkl` atau gunakan opsi "Buat model baru" di UI untuk melatih ulang model
 4. Restart aplikasi Streamlit untuk memuat artikel baru
 
-## Metodologi dan Referensi Ilmiah
+## 📚 Metodologi dan Referensi Ilmiah
 
-Sistem ini mengimplementasikan metodologi pencarian hybrid yang menggabungkan:
+### **Hybrid Search Methodology**
+Sistem ini mengimplementasikan pendekatan hybrid yang menggabungkan:
+- **TF-IDF**: Algoritma klasik berbasis statistik untuk analisis frekuensi kata
+- **BM25**: Algoritma probabilistik modern yang lebih efektif untuk dokumen dengan panjang bervariasi
+- **AI Expert**: Analisis semantik menggunakan Large Language Model (ChatGPT) untuk pemahaman konteks mendalam
 
-### **Algoritma Pencarian**
-1. **TF-IDF**: Pendekatan klasik berbasis frekuensi term
-2. **BM25**: Algoritma probabilistik modern dengan normalisasi panjang dokumen
+### **AI Expert Integration**
+Fitur AI Expert menggunakan:
+- **ChatGPT-3.5-turbo** untuk analisis semantik
+- **Context-aware evaluation** dengan pemahaman domain pemerintahan daerah
+- **Reasoning explanation** untuk transparansi penilaian
+- **Semantic similarity** yang melampaui keyword matching
 
-### **Combined Scoring**
-Menggunakan formula linear combination yang didasarkan pada penelitian:
-- **Zhou et al. (2012)**: Hybrid approach untuk personalized search
-- **Manning et al. (2008)**: Information retrieval fundamentals
-- **Liu et al. (2011)**: Parameter sensitivity dalam learning to rank
-- **Han et al. (2011)**: Data preprocessing dan normalisasi
+### **Combined Scoring berdasarkan Penelitian**
+Formula combined scoring didasarkan pada penelitian tentang personalized search dan learning to rank, dengan mempertimbangkan:
+- Relevansi konten (similarity score dari TF-IDF/BM25/AI)
+- Popularitas artikel (normalized access count)
+- Bobot yang dapat disesuaikan (parameter α)
 
-### **Preprocessing Bahasa Indonesia**
-- Menggunakan **Sastrawi** untuk stemming Bahasa Indonesia
-- Stopword removal dengan daftar kata yang disesuaikan
-- Text cleaning untuk menangani konten web
+### **Indonesian Text Preprocessing**
+Menggunakan library Sastrawi untuk:
+- Stemming Bahasa Indonesia
+- Stopword removal
+- Text normalization
 
-Detail lengkap rumus dan referensi dapat dilihat di `referensi_perhitungan.md`
+### **Referensi Lengkap**
+Lihat file `referensi_perhitungan.md` untuk detail metodologi dan referensi ilmiah yang digunakan.
 
 ## Catatan
 
